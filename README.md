@@ -34,7 +34,6 @@ c.SlurmRESTAPISpawner.account = "my-account"
 c.SlurmRESTAPISpawner.time_limit = "02:00:00"
 c.SlurmRESTAPISpawner.mem_per_node = "8G"
 c.SlurmRESTAPISpawner.cpus_per_task = 2
-
 ```
 
 ## Notes
@@ -44,4 +43,5 @@ c.SlurmRESTAPISpawner.cpus_per_task = 2
   - `slurm_vXXXX_get_job`
   - `slurm_vXXXX_delete_job`
 - `slurm_api_version` must match the installed client's supported API versions.
-- Token is read from `c.SlurmRESTAPISpawner.slurm_token`
+```
+
