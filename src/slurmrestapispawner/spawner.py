@@ -115,11 +115,6 @@ class SlurmRESTAPISpawner(Spawner):
     )
 
     job_id = Unicode("")
-    cmd = List(
-        ["jupyterhub-singleuser"],
-        config=True,
-        help="Command to launch single-user server.",
-    )
     prologue = Unicode(
         "module load JupyterHub JupyterLab",
         config=True,
@@ -361,25 +356,7 @@ class SlurmRESTAPISpawner(Spawner):
                 api = openapi_client.SlurmApi(api_client)
                 method_name = self._resolve_method_name(api, op)
                 method = getattr(api, method_name)
-                if self.debug_slurm_api:
-                    resolved_version = self._method_suffix_to_api_version(method_name)
-                    api_url = f"{self.slurmrestd_url.rstrip('/')}/slurm/{
-                        resolved_version
-                    }{self._api_path_for_op(op, args)}"
-                    self.log.warning(
-                        "Slurm API call: method=%s op=%s url=%s args=%s",
-                        method_name,
-                        op,
-                        api_url,
-                        self._sanitize_for_log(list(args)),
-                    )
                 result = method(*args, _request_timeout=self.request_timeout)
-                if self.debug_slurm_api:
-                    self.log.warning(
-                        "Slurm API response: method=%s body=%s",
-                        method_name,
-                        self._sanitize_for_log(self._to_dict(result)),
-                    )
                 return result
 
         try:
@@ -397,7 +374,7 @@ class SlurmRESTAPISpawner(Spawner):
             raise
 
     def _singleuser_command(self) -> str:
-        argv = list(self.cmd) + list(self.get_args())
+        argv = ['batchspawner-singleuser'] + list(self.cmd) + list(self.get_args())
         argv.extend(["--ip=0.0.0.0", f"--port={self.port}"])
         return shlex.join(argv)
 
@@ -496,12 +473,6 @@ class SlurmRESTAPISpawner(Spawner):
         started = time.monotonic()
 
         while True:
-            # if time.monotonic() - started > self.start_timeout:
-            #    raise TimeoutError(
-            #        f"Slurm job {self.job_id} did not reach RUNNING within {
-            #            self.start_timeout
-            #        }s"
-            #    )
 
             status = await self.poll()
             if status is not None:
