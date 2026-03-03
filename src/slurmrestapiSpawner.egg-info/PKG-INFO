@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: slurmrestapiSpawner
+Version: 0.1.0
+Summary: JupyterHub Spawner backed by Slurm REST API (slurmrestd)
+Author: slurmrestapiSpawner contributors
+Project-URL: Homepage, https://example.invalid/slurmrestapiSpawner
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: jupyterhub>=4.0
+Requires-Dist: traitlets>=5.0
+Requires-Dist: slurmrestpy>=0.0.1
+
 # slurmrestapiSpawner
 
 A custom JupyterHub Spawner that submits and manages user servers through the Slurm REST API (`slurmrestd`) using `slurmrestpy`.
@@ -35,6 +47,8 @@ c.SlurmRESTAPISpawner.time_limit = "02:00:00"
 c.SlurmRESTAPISpawner.mem_per_node = "8G"
 c.SlurmRESTAPISpawner.cpus_per_task = 2
 
+# If host inference from Slurm response is not sufficient
+# c.SlurmRESTAPISpawner.execution_host_fallback = "compute-gateway.example.org"
 ```
 
 ## Notes
@@ -44,4 +58,23 @@ c.SlurmRESTAPISpawner.cpus_per_task = 2
   - `slurm_vXXXX_get_job`
   - `slurm_vXXXX_delete_job`
 - `slurm_api_version` must match the installed client's supported API versions.
-- Token is read from `c.SlurmRESTAPISpawner.slurm_token`
+- Token is read from `c.SlurmRESTAPISpawner.slurm_token` first, then from `token_env_var`.
+- Depending on your Slurm version/site policy, the payload fields may need minor tuning. Use `extra_job_fields` for site-specific job options.
+
+## Integration connectivity tests
+
+Run a simple connectivity/auth check against your cluster:
+
+```bash
+SLURMRESTD_URL="http://slurmrestd.meluxina.lxp.lu:6820" \
+SLURM_JWT="<your-token>" \
+SLURM_USER="ekieffer" \
+SLURM_API_VERSION="v0.0.43" \
+python3 -m unittest -v tests/integration/test_cluster_connectivity.py
+```
+
+## Next improvements
+
+- Add profile-based resource selection (like BatchSpawner profiles)
+- Add robust hostlist expansion integration (via `scontrol show hostnames` or `python-hostlist`)
+- Add integration tests against a test `slurmrestd`

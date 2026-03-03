@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slurmrestapiSpawner"
+version = "0.1.0"
+description = "JupyterHub Spawner backed by Slurm REST API (slurmrestd)"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "slurmrestapiSpawner contributors" }
+]
+dependencies = [
+  "jupyterhub>=4.0",
+  "traitlets>=5.0",
+  "slurmrestpy>=0.0.1"
+]
+
+[project.urls]
+Homepage = "https://example.invalid/slurmrestapiSpawner"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

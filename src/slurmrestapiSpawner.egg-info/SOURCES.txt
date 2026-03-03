@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/slurmrestapiSpawner.egg-info/PKG-INFO
+src/slurmrestapiSpawner.egg-info/SOURCES.txt
+src/slurmrestapiSpawner.egg-info/dependency_links.txt
+src/slurmrestapiSpawner.egg-info/requires.txt
+src/slurmrestapiSpawner.egg-info/top_level.txt
+src/slurmrestapispawner/__init__.py
+src/slurmrestapispawner/spawner.py
