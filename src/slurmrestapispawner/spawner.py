@@ -6,7 +6,7 @@ import math
 from typing import Any, Dict, Optional
 
 from jupyterhub.spawner import Spawner
-from traitlets import Bool, Dict as DictTrait, Int, Unicode
+from traitlets import Bool, Dict as DictTrait, Int, Unicode, List
 
 
 class SlurmRESTAPISpawner(Spawner):
@@ -20,13 +20,13 @@ class SlurmRESTAPISpawner(Spawner):
     """
 
     slurmrestd_url = Unicode(
-        "http://127.0.0.1:6820",
+        "http://slurmrestd.meluxina.lxp.lu:6820",
         config=True,
         help="Base URL for slurmrestd.",
     )
 
     slurm_api_version = Unicode(
-        "v0.0.43",
+        "v0.0.40",
         config=True,
         help="Slurm REST API version segment used in endpoint URLs.",
     )
@@ -71,6 +71,11 @@ class SlurmRESTAPISpawner(Spawner):
         config=True,
         help="Enable verbose debug logging of Slurm REST requests/responses (sanitized).",
     )
+    debug_show_batch_script = Bool(
+        False,
+        config=True,
+        help="If True, log the full rendered batch script before job submission.",
+    )
 
     startup_poll_interval = Int(
         3,
@@ -87,12 +92,21 @@ class SlurmRESTAPISpawner(Spawner):
     # Job defaults
     partition = Unicode("", config=True, help="Slurm partition.")
     account = Unicode("", config=True, help="Slurm account.")
+    slurm_token = Unicode(
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjM5MTk5Mjc2MDAsImlhdCI6MTc3MjQ0Mzk1NCwic3VuIjoiZWtpZWZmZXIifQ.irg5l2zWerzi7IWBWuORMjOF2414uWzOtz1jMzXJ0Qk",
+        config=True,
+        help="Slurm token",
+    )
     qos = Unicode("", config=True, help="Slurm QoS.")
     time_limit = Unicode("01:00:00", config=True, help="Slurm time limit HH:MM:SS.")
     cpus_per_task = Int(1, config=True, help="Deprecated: not used in job submission.")
-    mem_per_node = Unicode("2G", config=True, help="Deprecated: not used in job submission.")
+    mem_per_node = Unicode(
+        "2G", config=True, help="Deprecated: not used in job submission."
+    )
 
-    extra_job_fields = DictTrait(default_value={}, config=True, help="Deprecated: not used in job submission.")
+    extra_job_fields = DictTrait(
+        default_value={}, config=True, help="Deprecated: not used in job submission."
+    )
 
     enable_user_options_form = Bool(
         True,
@@ -100,14 +114,20 @@ class SlurmRESTAPISpawner(Spawner):
         help="If True, show a spawn form allowing users to override Slurm job options.",
     )
 
-    job_id = Int(0)
+    job_id = Unicode("")
+    cmd = List(
+        ["jupyterhub-singleuser"],
+        config=True,
+        help="Command to launch single-user server.",
+    )
+    prologue = Unicode(
+        "module load JupyterHub JupyterLab",
+        config=True,
+        help="Command to launch single-user server.",
+    )
 
     batch_script = Unicode(
-        """#!/bin/bash
-set -euo pipefail
-{prologue}
-exec {singleuser_cmd}
-""",
+        "#!/bin/bash -l\n\n{prologue}\n\n{singleuser_cmd}\n",
         config=True,
         help=(
             "Batch script template rendered with: prologue, singleuser_cmd. "
@@ -121,19 +141,19 @@ exec {singleuser_cmd}
             return ""
         return f"""
 <label for="slurm-account">Account</label>
-<input name="account" id="slurm-account" type="text" value="{s.account or ''}" />
+<input name="account" id="slurm-account" type="text" value="{s.account or ""}" />
 <br/>
 <label for="slurm-partition">Partition</label>
-<input name="partition" id="slurm-partition" type="text" value="{s.partition or ''}" />
+<input name="partition" id="slurm-partition" type="text" value="{s.partition or ""}" />
 <br/>
 <label for="slurm-qos">QoS</label>
-<input name="qos" id="slurm-qos" type="text" value="{s.qos or ''}" />
+<input name="qos" id="slurm-qos" type="text" value="{s.qos or ""}" />
 <br/>
 <label for="slurm-time-limit">Time limit</label>
 <input name="time_limit" id="slurm-time-limit" type="text" value="{s.time_limit}" placeholder="02:00:00" />
 <br/>
 <label for="slurm-token">Token</label>
-<input name="token" id="slurm-token" type="password" value="" placeholder="SLURM JWT token" />
+<input name="token" id="slurm-token" type="password" value="{s.slurm_token}" placeholder="SLURM JWT token" />
 <br/>
 <label for="slurm-user">Slurm user</label>
 <input name="slurm_user" id="slurm-user" type="text" value="{s.slurm_user or s.user.name}" />
@@ -191,7 +211,9 @@ exec {singleuser_cmd}
         major, minor, patch = (int(p) for p in parts)
         if major != 0:
             raise ValueError(
-                f"Unsupported major version in slurm_api_version '{self.slurm_api_version}'. "
+                f"Unsupported major version in slurm_api_version '{
+                    self.slurm_api_version
+                }'. "
                 "Expected v0.x.y format."
             )
         return f"v{minor:02d}{patch:02d}"
@@ -209,13 +231,15 @@ exec {singleuser_cmd}
                 available.append((int(m.group(1)[1:]), name))
 
         if not available:
-            raise RuntimeError(f"slurmrestpy does not expose any method for operation '{op}'")
+            raise RuntimeError(
+                f"openapi_client does not expose any method for operation '{op}'"
+            )
 
         available.sort(reverse=True)
         fallback_name = available[0][1]
         self.log.warning(
-            "slurmrestpy does not expose method '%s'; falling back to '%s'. "
-            "Adjust slurm_api_version or upgrade slurmrestpy.",
+            "openapi_client does not expose method '%s'; falling back to '%s'. "
+            "Adjust slurm_api_version or upgrade openapi_client.",
             preferred,
             fallback_name,
         )
@@ -248,6 +272,21 @@ exec {singleuser_cmd}
             return [self._sanitize_for_log(v) for v in value]
         return value
 
+    def _method_suffix_to_api_version(self, method_name: str) -> str:
+        m = re.match(r"^slurm_v(\d{2})(\d{2})_", method_name)
+        if not m:
+            return self.slurm_api_version
+        return f"v0.{int(m.group(1))}.{int(m.group(2))}"
+
+    def _api_path_for_op(self, op: str, args: Any) -> str:
+        if op == "post_job_submit":
+            return "/job/submit"
+        if op == "get_job" and args:
+            return f"/job/{args[0]}"
+        if op == "delete_job" and args:
+            return f"/job/{args[0]}"
+        return f"/{op}"
+
     def _uint_value(self, n: int) -> Dict[str, Any]:
         return {"set": True, "number": int(n)}
 
@@ -262,7 +301,9 @@ exec {singleuser_cmd}
         m = re.match(r"^(?:(\d+)-)?(\d+):(\d+)(?::(\d+))?$", raw)
         if not m:
             raise ValueError(
-                f"Unsupported time_limit format '{value}'. Expected minutes or [[DD-]HH:]MM:SS"
+                f"Unsupported time_limit format '{
+                    value
+                }'. Expected minutes or [[DD-]HH:]MM:SS"
             )
         days_s, a_s, b_s, c_s = m.groups()
         days = int(days_s) if days_s else 0
@@ -288,7 +329,9 @@ exec {singleuser_cmd}
         m = re.match(r"^(\d+)\s*([KMGTP])(?:i?B?)?$", raw, re.IGNORECASE)
         if not m:
             raise ValueError(
-                f"Unsupported mem_per_node format '{value}'. Expected integer MiB or suffix K/M/G/T/P."
+                f"Unsupported mem_per_node format '{
+                    value
+                }'. Expected integer MiB or suffix K/M/G/T/P."
             )
 
         amount = int(m.group(1))
@@ -304,29 +347,30 @@ exec {singleuser_cmd}
 
     async def _slurm_call(self, op: str, *args):
         try:
-            import slurmrestpy
+            import openapi_client
         except Exception as e:
-            raise RuntimeError(
-                "slurmrestpy is required but not installed. Install with: pip install slurmrestpy"
-            ) from e
+            raise RuntimeError("openapi_client is required but not installed.") from e
 
         def _run():
-            cfg = slurmrestpy.Configuration(host=self.slurmrestd_url.rstrip("/"))
+            cfg = openapi_client.Configuration(host=self.slurmrestd_url.rstrip("/"))
             cfg.verify_ssl = self.validate_cert
-            cfg.api_key["user"] = self._slurm_user_value()
-            token = self._slurm_token_value()
-            if token:
-                cfg.api_key["token"] = token
-                cfg.access_token = token
-            with slurmrestpy.ApiClient(cfg) as api_client:
-                api = slurmrestpy.SlurmApi(api_client)
+
+            cfg.username = self._slurm_user_value()
+            cfg.access_token = self._slurm_token_value()
+            with openapi_client.ApiClient(cfg) as api_client:
+                api = openapi_client.SlurmApi(api_client)
                 method_name = self._resolve_method_name(api, op)
                 method = getattr(api, method_name)
                 if self.debug_slurm_api:
+                    resolved_version = self._method_suffix_to_api_version(method_name)
+                    api_url = f"{self.slurmrestd_url.rstrip('/')}/slurm/{
+                        resolved_version
+                    }{self._api_path_for_op(op, args)}"
                     self.log.warning(
-                        "Slurm API call: method=%s op=%s args=%s",
+                        "Slurm API call: method=%s op=%s url=%s args=%s",
                         method_name,
                         op,
+                        api_url,
                         self._sanitize_for_log(list(args)),
                     )
                 result = method(*args, _request_timeout=self.request_timeout)
@@ -347,7 +391,9 @@ exec {singleuser_cmd}
                 status = getattr(e, "status", "unknown")
                 reason = getattr(e, "reason", str(e))
                 body = getattr(e, "body", "")
-                raise RuntimeError(f"Slurm REST request failed ({status}): {reason} {body}") from e
+                raise RuntimeError(
+                    f"Slurm REST request failed ({status}): {reason} {body}"
+                ) from e
             raise
 
     def _singleuser_command(self) -> str:
@@ -356,17 +402,10 @@ exec {singleuser_cmd}
         return shlex.join(argv)
 
     def _render_script(self) -> str:
-        prologue = "\n".join(self.get_env_exports())
         return self.batch_script.format(
-            prologue=prologue,
+            prologue=self.prologue,
             singleuser_cmd=self._singleuser_command(),
         )
-
-    def get_env_exports(self):
-        exports = []
-        for key, value in self.get_env().items():
-            exports.append(f"export {shlex.quote(str(key))}={shlex.quote(str(value))}")
-        return exports
 
     def _first_hostname_from_nodelist(self, raw: str) -> str:
         raw = (raw or "").strip()
@@ -388,7 +427,7 @@ exec {singleuser_cmd}
         return raw.split(",")[0]
 
     def _job_state(self, job: Dict[str, Any]) -> str:
-        return (job.get("job_state") or job.get("job_state_current") or "").upper()
+        return list(map(lambda x: x.upper(), job.get("job_state", [])))
 
     def _job_host(self, job: Dict[str, Any]) -> str:
         for key in ("nodes", "batch_host", "alloc_node", "node_list"):
@@ -397,12 +436,21 @@ exec {singleuser_cmd}
                 return self._first_hostname_from_nodelist(str(value))
         return ""
 
-    async def _submit_job(self) -> int:
+    async def _submit_job(self) -> str:
         script = self._render_script()
+        if self.debug_show_batch_script:
+            self.log.warning(
+                "Rendered Slurm batch script for %s:\n%s", self.user.name, script
+            )
 
+        home_dir = f"/mnt/tier2/users/{self.slurm_user}"
         job_desc = {
-            "name": f"jupyter-{self.user.name}",
-            "time_limit": self._uint_value(self._parse_time_limit_minutes(self.time_limit)),
+            "name": f"jupyter-{self.slurm_user}",
+            "time_limit": self._uint_value(
+                self._parse_time_limit_minutes(self.time_limit)
+            ),
+            "current_working_directory": home_dir,
+            "environment": ["PATH=/bin/:/usr/bin/:/sbin/", f"HOME={home_dir}"],
         }
         if self.partition:
             job_desc["partition"] = self.partition
@@ -419,12 +467,14 @@ exec {singleuser_cmd}
             payload["cluster"] = self.slurm_cluster
 
         resp = self._to_dict(await self._slurm_call("post_job_submit", payload))
-        job_id = int(resp.get("job_id", 0))
+        job_id = str(resp.get("job_id", ""))
         if not job_id:
-            raise RuntimeError(f"Slurm REST submit response did not include job_id: {resp}")
+            raise RuntimeError(
+                f"Slurm REST submit response did not include job_id: {resp}"
+            )
         return job_id
 
-    async def _get_job(self, job_id: int) -> Optional[Dict[str, Any]]:
+    async def _get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         try:
             resp = self._to_dict(await self._slurm_call("get_job", job_id))
         except RuntimeError as e:
@@ -446,44 +496,45 @@ exec {singleuser_cmd}
         started = time.monotonic()
 
         while True:
-            if time.monotonic() - started > self.start_timeout:
-                raise TimeoutError(
-                    f"Slurm job {self.job_id} did not reach RUNNING within {self.start_timeout}s"
+            # if time.monotonic() - started > self.start_timeout:
+            #    raise TimeoutError(
+            #        f"Slurm job {self.job_id} did not reach RUNNING within {
+            #            self.start_timeout
+            #        }s"
+            #    )
+
+            status = await self.poll()
+            if status is not None:
+                raise RuntimeError(
+                    f"Slurm job {self.job_id} has exited unexpectedly with status {
+                        status
+                    }."
                 )
 
-            if await self.poll() is not None:
-                raise RuntimeError(f"Slurm job {self.job_id} exited before becoming RUNNING")
-
-            job = await self._get_job(self.job_id)
-            state = self._job_state(job or {})
-            if state == "RUNNING":
-                host = self._job_host(job or {}) or self.execution_host_fallback
-                if not host:
-                    raise RuntimeError(
-                        f"Job {self.job_id} is RUNNING but execution host was not found; "
-                        "configure execution_host_fallback"
-                    )
-                self.log.info("Slurm job %s running on %s:%s", self.job_id, host, self.port)
-                return host, self.port
-
+            self.log.info("Slurm job %s for %s is running", self.job_id, self.user.name)
             await asyncio.sleep(self.startup_poll_interval)
 
     async def poll(self):
         if not self.job_id:
-            return 0
+            return 1
 
         job = await self._get_job(self.job_id)
+        print(job)
         if not job:
             return 1
 
         state = self._job_state(job)
-        if state in {"RUNNING", "PENDING", "COMPLETING", "CONFIGURING"}:
-            return None
-
-        if state in {"COMPLETED"}:
-            return 0
-
-        return 1
+        print(state)
+        if len(state) == 0:
+            return 1
+        else:
+            match state[0]:
+                case "RUNNING" | "PENDING" | "COMPLETING" | "CONFIGURING":
+                    return None
+                case "COMPLETED":
+                    return 0
+                case _:
+                    return 1
 
     async def stop(self, now=False):
         if not self.job_id:
@@ -499,8 +550,8 @@ exec {singleuser_cmd}
 
     def load_state(self, state):
         super().load_state(state)
-        self.job_id = int(state.get("job_id", 0))
+        self.job_id = str(state.get("job_id", ""))
 
     def clear_state(self):
         super().clear_state()
-        self.job_id = 0
+        self.job_id = ""
