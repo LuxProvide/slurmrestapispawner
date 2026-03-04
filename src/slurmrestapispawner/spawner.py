@@ -117,9 +117,12 @@ class SlurmRESTAPISpawner(Spawner):
 
     job_id = Unicode("")
     prologue = Unicode(
-        "module load JupyterHub JupyterLab",
+        """
+module load Python
+source  /mnt/tier2/users/ekieffer/test_restapi/bin/activate
+env | grep JUPYTER* """,
         config=True,
-        help="Command to launch single-user server.",
+        help="Prologue commands to run before the single-user server starts.",
     )
 
     batch_script = Unicode(
@@ -375,10 +378,12 @@ class SlurmRESTAPISpawner(Spawner):
             raise
 
     def _singleuser_command(self) -> str:
+        wrapper_cmd="slurmrestapi-singleuser"
         api_url = f"JUPYTERHUB_API_URL={self.hub.api_url}"
         service_url = f"JUPYTERHUB_SERVICE_URL=\"http://0.0.0.0:{self.port}"
-        argv = ["env",service_url,api_url] + list(self.cmd) + list(self.get_args()) 
-        argv.extend(["--ip=0.0.0.0", f"--port={self.port}","--debug"])
+        argv = ["env",service_url,api_url, wrapper_cmd] + list(self.cmd) + list(self.get_args()) + ["--debug"]
+        #argv.extend(["--ip=0.0.0.0", f"--port={self.port}"])
+        argv.extend(["--ip=0.0.0.0"])
         return shlex.join(argv)
 
     def _render_script(self) -> str:
@@ -430,7 +435,11 @@ class SlurmRESTAPISpawner(Spawner):
                 self._parse_time_limit_minutes(self.time_limit)
             ),
             "current_working_directory": home_dir,
-            "environment": ["PATH=/bin/:/usr/bin/:/sbin/", f"HOME={home_dir}"],
+#            "environment": ["PATH=/bin/:/usr/bin/:/sbin/", f"HOME={home_dir}",
+#                            f"JUPYTERHUB_API_TOKEN={self.get_env().get('JUPYTERHUB_API_TOKEN', '')}",
+#                            f"JUPYTERHUB_USER={self.user.name}",
+#                            f"JUPYTERHUB_SERVICE_PREFIX={self.get_env().get('JUPYTERHUB_SERVICE_PREFIX', '')}"],
+            "environment": [f"{k}={v}" for k, v in self.get_env().items()],
         }
         if self.partition:
             job_desc["partition"] = self.partition
@@ -470,8 +479,6 @@ class SlurmRESTAPISpawner(Spawner):
         return jobs[0]
 
     async def start(self):
-        if not self.port:
-            self.port = 8888
 
         self.job_id = await self._submit_job()
         if len(self.job_id) == 0:
@@ -493,7 +500,11 @@ class SlurmRESTAPISpawner(Spawner):
                     raise RuntimeError(f"Slurm job {self.job_id} completed without starting")
 
             await asyncio.sleep(self.startup_poll_interval)
-        return ("10.3.22.3", self.port)
+        while self.port==0:
+            self.log.info("Waitinf or singleuser server to bind to start")
+            await asyncio.sleep(self.startup_poll_interval)
+
+        return (self.ip, self.port)
 
     async def poll(self):
         if not self.job_id:

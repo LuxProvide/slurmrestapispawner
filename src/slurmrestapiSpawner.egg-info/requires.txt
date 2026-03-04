@@ -1,3 +1,0 @@
-jupyterhub>=4.0
-traitlets>=5.0
-slurmrestpy>=0.0.1
