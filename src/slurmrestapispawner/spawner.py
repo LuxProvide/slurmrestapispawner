@@ -6,6 +6,7 @@ import math
 from typing import Any, Dict, Optional
 
 from jupyterhub.spawner import Spawner
+from jupyterhub.services.auth import HubAuth
 from traitlets import Bool, Dict as DictTrait, Int, Unicode, List
 
 
@@ -20,7 +21,7 @@ class SlurmRESTAPISpawner(Spawner):
     """
 
     slurmrestd_url = Unicode(
-        "http://slurmrestd.meluxina.lxp.lu:6820",
+        "",
         config=True,
         help="Base URL for slurmrestd.",
     )
@@ -374,8 +375,10 @@ class SlurmRESTAPISpawner(Spawner):
             raise
 
     def _singleuser_command(self) -> str:
-        argv = ['batchspawner-singleuser'] + list(self.cmd) + list(self.get_args())
-        argv.extend(["--ip=0.0.0.0", f"--port={self.port}"])
+        api_url = f"JUPYTERHUB_API_URL={self.hub.api_url}"
+        service_url = f"JUPYTERHUB_SERVICE_URL=\"http://0.0.0.0:{self.port}"
+        argv = ["env",service_url,api_url] + list(self.cmd) + list(self.get_args()) 
+        argv.extend(["--ip=0.0.0.0", f"--port={self.port}","--debug"])
         return shlex.join(argv)
 
     def _render_script(self) -> str:
@@ -436,6 +439,8 @@ class SlurmRESTAPISpawner(Spawner):
         if self.qos:
             job_desc["qos"] = self.qos
 
+        job_desc["required_nodes"] = ["mel3003"]
+
         payload: Dict[str, Any] = {
             "job": job_desc,
             "script": script,
@@ -469,21 +474,26 @@ class SlurmRESTAPISpawner(Spawner):
             self.port = 8888
 
         self.job_id = await self._submit_job()
+        if len(self.job_id) == 0:
+            raise RuntimeError(
+                "Jupyter job submission failure (no jobid in output)"
+           )
         self.log.info("Submitted Slurm job %s for %s", self.job_id, self.user.name)
-        started = time.monotonic()
 
         while True:
+            job = await self._get_job(self.job_id)
+            state = self._job_state(job)
+            match state[0]:
+                case "RUNNING":
+                    self.log.info("Slurm job %s for %s is running", self.job_id, self.user.name)
+                    break
+                case "PENDING" | "CONFIGURING":
+                    self.log.info("Slurm job %s for %s is pending", self.job_id, self.user.name)
+                case "COMPLETED":
+                    raise RuntimeError(f"Slurm job {self.job_id} completed without starting")
 
-            status = await self.poll()
-            if status is not None:
-                raise RuntimeError(
-                    f"Slurm job {self.job_id} has exited unexpectedly with status {
-                        status
-                    }."
-                )
-
-            self.log.info("Slurm job %s for %s is running", self.job_id, self.user.name)
             await asyncio.sleep(self.startup_poll_interval)
+        return ("10.3.22.3", self.port)
 
     async def poll(self):
         if not self.job_id:

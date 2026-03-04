@@ -19,6 +19,9 @@ dependencies = [
 [project.urls]
 Homepage = "https://example.invalid/slurmrestapiSpawner"
 
+[project.scripts]
+slurmrestapi-singleuser = "slurmrestapispawner.singleuser:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

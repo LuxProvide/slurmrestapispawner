@@ -1,3 +1,2 @@
-from .spawner import SlurmRESTAPISpawner
-
-__all__ = ["SlurmRESTAPISpawner"]
+from .spawner import *
+from . import api  
