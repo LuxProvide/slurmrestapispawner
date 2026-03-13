@@ -1,47 +1,78 @@
-# slurmrestapiSpawner
+# SlurmRESTAPISpawner
 
-A custom JupyterHub Spawner that submits and manages user servers through the Slurm REST API (`slurmrestd`) using `slurmrestpy`.
+A custom JupyterHub Spawner that integrates with the Slurm REST API (`slurmrestd`) to manage user servers. This spawner leverages `slurmrestpy` to submit, monitor, and terminate Slurm jobs, providing a seamless experience for users requiring Slurm-based resource management.
 
-## What it does
+## Features
 
-- Submits a Slurm batch job through `POST /slurm/<api>/job/submit`
-- Polls Slurm job state through `GET /slurm/<api>/job/<job_id>`
-- Stops jobs through `DELETE /slurm/<api>/job/<job_id>`
-- Persists `job_id` in spawner state for Hub restarts
-- Provides a spawn form for per-user Slurm options (`account`, `partition`, `qos`, `time_limit`, `cpus_per_task`, `mem_per_node`)
+- **Job Submission**: Submits Slurm batch jobs via `POST /slurm/<api>/job/submit`.
+- **Job Monitoring**: Polls job states using `GET /slurm/<api>/job/<job_id>`.
+- **Job Termination**: Stops jobs through `DELETE /slurm/<api>/job/<job_id>`.
+- **State Persistence**: Persists `job_id` in the spawner state to handle Hub restarts.
+- **User Options Form**: Provides a customizable spawn form for per-user Slurm options, including:
+  - `account`
+  - `partition`
+  - `qos`
+  - `time_limit`
+  - `token`
+  - `slurm_user`
 
-## Install
+## Prerequisites
+
+Before using this spawner, ensure the following:
+
+- A running instance of `slurmrestd` that you can access throught the slurmestd url
+- A valid Slurm JWT token for authentication: `scontrol token` to obtain one after connecting to the cluster
+- Python 3.10 or higher.
+- JupyterHub installed and configured with jupyterlab.
+
+## Installation
+
+Install the spawner and its dependencies using:
 
 ```bash
-pip install -e .
+pip install .
 ```
 
-This installs `slurmrestpy` as a dependency.
+This will also install `slurmrestpy` as a dependency.
 
-## JupyterHub config example
+## Configuration
+
+Add the following configuration to your JupyterHub `jupyterhub_config.py` file:
 
 ```python
 c.JupyterHub.spawner_class = "slurmrestapispawner.SlurmRESTAPISpawner"
 
 c.SlurmRESTAPISpawner.slurmrestd_url = "https://slurmrestd.example.org:6820"
-c.SlurmRESTAPISpawner.slurm_api_version = "v0.0.43"
-c.SlurmRESTAPISpawner.token_env_var = "SLURM_JWT"
+c.SlurmRESTAPISpawner.slurm_api_version = "v0.0.40"
+c.SlurmRESTAPISpawner.token = "SLURM JWT token"
 c.SlurmRESTAPISpawner.enable_user_options_form = True
 
-# Optional
+# Optional settings
 c.SlurmRESTAPISpawner.partition = "interactive"
 c.SlurmRESTAPISpawner.account = "my-account"
+c.SlurmRESTAPISpawner.slurm_user = "my-user"
 c.SlurmRESTAPISpawner.time_limit = "02:00:00"
-c.SlurmRESTAPISpawner.mem_per_node = "8G"
-c.SlurmRESTAPISpawner.cpus_per_task = 2
 ```
+
+## Usage
+
+1. Start JupyterHub with the configured spawner.
+2. Users will see a spawn form to customize their Slurm job options.
+3. The spawner will handle job submission, monitoring, and termination transparently.
 
 ## Notes
 
-- The spawner calls the generated `slurmrestpy` endpoints:
+- The spawner uses the following `slurmrestpy` endpoints:
   - `slurm_vXXXX_post_job_submit`
   - `slurm_vXXXX_get_job`
   - `slurm_vXXXX_delete_job`
-- `slurm_api_version` must match the installed client's supported API versions.
-```
+- Ensure that the `slurm_api_version` matches the supported API versions of your Slurm installation.
+
+## Contributing
+
+Contributions are welcome! If you encounter issues or have feature requests, please open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
 

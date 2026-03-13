@@ -20,11 +20,6 @@ class SlurmRESTAPISpawner(Spawner):
     4. Return (ip, port) for JupyterHub to connect to.
     """
 
-    # The timeout (in seconds) to wait for the single-user server to start.
-    # It is possible that the job stays pending in the Slurm queue for a long time due to cluster load or scheduling policies, so this timeout should be set accordingly.
-    # A reasonable default is 5 minutes (300 seconds).
-    start_timeout = Integer(300).tag(config=True)
-
     # Base URL for slurmrestd, e.g. "https://slurm.example.com:6820". This is used to construct the full API endpoint URLs for job submission and management.
     slurmrestd_url = Unicode(
         "",
@@ -115,7 +110,7 @@ class SlurmRESTAPISpawner(Spawner):
 
     # The slurm_token can be set via config or provided by the user in the spawn form. It is used for authenticating with slurmrestd and must have appropriate permissions to submit and manage jobs.i
     slurm_token = Unicode(
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjM5MTk5Mjc2MDAsImlhdCI6MTc3MjQ0Mzk1NCwic3VuIjoiZWtpZWZmZXIifQ.irg5l2zWerzi7IWBWuORMjOF2414uWzOtz1jMzXJ0Qk",
+        "",
         config=True,
         help="Slurm token",
     )
@@ -139,11 +134,7 @@ class SlurmRESTAPISpawner(Spawner):
     # The prologue is a set of shell commands that run before the single-user server starts. i
     # This is where you can load modules, activate virtual environments, and set up the environment for the Jupyter server. 
     # The example prologue loads Python and activates a virtual environment, but you can customize it as needed for your cluster setup.
-    prologue = Unicode(
-        """
-module load Python
-source  /mnt/tier2/users/ekieffer/test_restapi/bin/activate
-env | grep JUPYTER* """,
+    prologue = Unicode("",
         config=True,
         help="Prologue commands to run before the single-user server starts.",
     )
@@ -180,23 +171,32 @@ env | grep JUPYTER* """,
         if not s.enable_user_options_form:
             return ""
         return f"""
-<label for="slurm-account">Account</label>
-<input name="account" id="slurm-account" type="text" value="{s.account or ""}" />
-<br/>
-<label for="slurm-partition">Partition</label>
-<input name="partition" id="slurm-partition" type="text" value="{s.partition or ""}" />
-<br/>
-<label for="slurm-qos">QoS</label>
-<input name="qos" id="slurm-qos" type="text" value="{s.qos or ""}" />
-<br/>
-<label for="slurm-time-limit">Time limit</label>
-<input name="time_limit" id="slurm-time-limit" type="text" value="{s.time_limit}" placeholder="02:00:00" />
-<br/>
-<label for="slurm-token">Token</label>
-<input name="token" id="slurm-token" type="password" value="{s.slurm_token}" placeholder="SLURM JWT token" />
-<br/>
-<label for="slurm-user">Slurm user</label>
-<input name="slurm_user" id="slurm-user" type="text" value="{s.slurm_user or s.user.name}" />
+<div style="max-width: 400px; margin: auto;">
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-account">Account</label>
+        <input name="account" id="slurm-account" type="text" value="{s.account or ''}" placeholder="Enter account" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-partition">Partition</label>
+        <input name="partition" id="slurm-partition" type="text" value="{s.partition or ''}" placeholder="Enter partition" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-qos">QoS</label>
+        <input name="qos" id="slurm-qos" type="text" value="{s.qos or ''}" placeholder="Enter QoS" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-time-limit">Time Limit</label>
+        <input name="time_limit" id="slurm-time-limit" type="text" value="{s.time_limit}" placeholder="e.g., 02:00:00" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-token">Token</label>
+        <input name="token" id="slurm-token" type="password" value="{s.slurm_token}" placeholder="SLURM JWT token" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1em;">
+        <label for="slurm-user">Slurm User</label>
+        <input name="slurm_user" id="slurm-user" type="text" value="{s.slurm_user}" placeholder="Enter Slurm user" style="width: 100%;" />
+    </div>
+</div>
 """
 
     def options_from_form(self, formdata):
