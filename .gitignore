@@ -2,5 +2,6 @@
 __pycache__/
 *.pyc
 jupyterhub.sqlite
+jupyterhub_config.py
 jupyterhub_cookie_secret
 **/slurmrestapiSpawner.egg-info
