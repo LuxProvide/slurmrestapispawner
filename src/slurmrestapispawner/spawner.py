@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from jupyterhub.spawner import Spawner
 from jupyterhub.services.auth import HubAuth
-from traitlets import Bool, Dict as DictTrait, Int, Unicode, List
+from traitlets import Bool, Dict as DictTrait, Int, Unicode, List, Integer
 
 
 class SlurmRESTAPISpawner(Spawner):
@@ -20,102 +20,125 @@ class SlurmRESTAPISpawner(Spawner):
     4. Return (ip, port) for JupyterHub to connect to.
     """
 
+    # The timeout (in seconds) to wait for the single-user server to start.
+    # It is possible that the job stays pending in the Slurm queue for a long time due to cluster load or scheduling policies, so this timeout should be set accordingly.
+    # A reasonable default is 5 minutes (300 seconds).
+    start_timeout = Integer(300).tag(config=True)
+
+    # Base URL for slurmrestd, e.g. "https://slurm.example.com:6820". This is used to construct the full API endpoint URLs for job submission and management.
     slurmrestd_url = Unicode(
         "",
         config=True,
         help="Base URL for slurmrestd.",
     )
 
+    # The slurm_api_version is used to determine which openapi_client method to call for each operation.
+    # It should match the version of slurmrestd you are using, and the openapi_client library should have generated methods for that version.
+    # The _resolve_method_name function uses this version to find the appropriate method in the openapi_client.SlurmApi class, allowing compatibility with multiple API versions.
+    # Adjust this version as needed when upgrading slurmrestd or openapi_client.
     slurm_api_version = Unicode(
         "v0.0.40",
         config=True,
         help="Slurm REST API version segment used in endpoint URLs.",
     )
 
+    # If your slurmrestd setup uses clusters or partitions that require specifying a cluster name in the API calls, you can set it here.
+    # It will be included in the job submission payload to slurmrestd. If not needed, leave it empty.
     slurm_cluster = Unicode(
         "",
         config=True,
         help="Optional cluster name for job submission.",
     )
 
-    token_env_var = Unicode(
-        "SLURM_JWT",
-        config=True,
-        help="Environment variable containing a Slurm REST auth token.",
-    )
 
+    # The slurm_token is required for authenticating with slurmrestd.
+    # It can be set via configuration or provided by the user in the spawn form. 
+    # The token must have appropriate permissions to submit and manage jobs through slurmrestd.
     slurm_token = Unicode(
         "",
         config=True,
-        help="Slurm REST auth token. If empty, token_env_var is used.",
+        help="Slurm REST auth token.",
     )
+
+    # The slurm_user is the username that will be used for authenticating with slurmrestd.
+    # It can be set via configuration or provided by the user in the spawn form. If not set, it defaults to the JupyterHub username.
+    # This allows for flexibility in cases where the Slurm username differs from the JupyterHub username, or when a shared service account is used for job submission. 
     slurm_user = Unicode(
         "",
         config=True,
         help="Slurm user override for REST requests. If empty, JupyterHub username is used.",
     )
 
+    # Whether to validate TLS certificates for slurmrestd HTTPS calls.
     validate_cert = Bool(
         True,
         config=True,
         help="Validate TLS certificates for slurmrestd HTTPS calls.",
     )
 
+    # Per-request timeout for Slurm REST API calls. Adjust as needed based on your cluster's typical response times and network conditions.
+    # A reasonable default is 30 seconds, but you may want to increase it if you have a large cluster or if slurmrestd is known to respond slowly.
     request_timeout = Int(
         30,
         config=True,
         help="Per-request timeout (seconds) for Slurm REST calls.",
     )
 
+    # If True, log detailed information about Slurm REST API requests and responses, with sensitive info redacted.
+    # Useful for debugging API interactions and payloads, but can expose sensitive info and should be used with caution.
     debug_slurm_api = Bool(
         False,
         config=True,
         help="Enable verbose debug logging of Slurm REST requests/responses (sanitized).",
     )
+
+    # If True, log the full rendered batch script before submission. Useful for debugging script generation issues, but can expose sensitive info and should be used with caution. 
     debug_show_batch_script = Bool(
         False,
         config=True,
         help="If True, log the full rendered batch script before job submission.",
     )
 
+    # Interval between polling Slurm for job state during startup. Adjust as needed for your cluster's typical job start times and slurmrestd performance.
+    # A shorter interval can lead to faster detection of the job starting, but may increase load on slurmrestd and the cluster if set too low.
     startup_poll_interval = Int(
         3,
         config=True,
         help="Seconds between Slurm job state checks during startup.",
     )
 
-    execution_host_fallback = Unicode(
-        "",
-        config=True,
-        help="Fallback hostname/IP if execution host cannot be inferred.",
-    )
-
     # Job defaults
     partition = Unicode("", config=True, help="Slurm partition.")
+
+    # Account is optional and can be left empty if not used in your cluster. If specified, it will be included in the job submission payload to slurmrestd. i
     account = Unicode("", config=True, help="Slurm account.")
+
+    # The slurm_token can be set via config or provided by the user in the spawn form. It is used for authenticating with slurmrestd and must have appropriate permissions to submit and manage jobs.i
     slurm_token = Unicode(
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjM5MTk5Mjc2MDAsImlhdCI6MTc3MjQ0Mzk1NCwic3VuIjoiZWtpZWZmZXIifQ.irg5l2zWerzi7IWBWuORMjOF2414uWzOtz1jMzXJ0Qk",
         config=True,
         help="Slurm token",
     )
+
+    # QoS is optional and can be left empty if not used in your cluster. If specified, it will be included in the job submission payload to slurmrestd.
     qos = Unicode("", config=True, help="Slurm QoS.")
+    # Slurm time limit can be specified in minutes (e.g. "120") or in the format [[DD-]HH:]MM:SS (e.g. "02:00:00" or "1-00:00:00"). i
+    # The _parse_time_limit_minutes method converts these formats to total minutes for the Slurm API.
     time_limit = Unicode("01:00:00", config=True, help="Slurm time limit HH:MM:SS.")
-    cpus_per_task = Int(1, config=True, help="Deprecated: not used in job submission.")
-    mem_per_node = Unicode(
-        "2G", config=True, help="Deprecated: not used in job submission."
-    )
 
-    extra_job_fields = DictTrait(
-        default_value={}, config=True, help="Deprecated: not used in job submission."
-    )
-
+    # If True, show a spawn form allowing users to override Slurm job options.
     enable_user_options_form = Bool(
         True,
         config=True,
         help="If True, show a spawn form allowing users to override Slurm job options.",
     )
 
+    # The job_id is stored in the spawner state to track the submitted Slurm job across restarts and for polling its status. It is not set until start() is called and a job is submitted.
     job_id = Unicode("")
+
+    # The prologue is a set of shell commands that run before the single-user server starts. i
+    # This is where you can load modules, activate virtual environments, and set up the environment for the Jupyter server. 
+    # The example prologue loads Python and activates a virtual environment, but you can customize it as needed for your cluster setup.
     prologue = Unicode(
         """
 module load Python
@@ -125,16 +148,34 @@ env | grep JUPYTER* """,
         help="Prologue commands to run before the single-user server starts.",
     )
 
-    batch_script = Unicode(
-        "#!/bin/bash -l\n\n{prologue}\n\n{singleuser_cmd}\n",
+    # The epilogue can be used for cleanup commands or diagnostics after the single-user server starts. It runs in the same job script, so it can access the same environment variables and context.
+    epilogue = Unicode(
+        "",
         config=True,
+        help="Epilogue commands to run after the single-user server starts.",
+    )
+
+    # The batch script template. The prologue, singleuser_cmd, and epilogue are substituted into this template to create the final script that is submitted to Slurm. 
+    batch_script = Unicode(
+        "#!/bin/bash -l\n\n{prologue}\n\n{singleuser_cmd}\n\n{epilogue}",
+        config=False,
         help=(
-            "Batch script template rendered with: prologue, singleuser_cmd. "
+            "Batch script template rendered with: prologue, singleuser_cmd, epilogue. "
             "singleuser_cmd already includes proper shell quoting."
         ),
     )
 
+    # The wrapper_cmd is used to invoke the slurmrestapi-singleuser script, which captures the environment variables and other context for the single-user server.
+    wrapper_cmd = Unicode(
+        "slurmrestapi-singleuser",
+        config=True,
+        help="Command name for the slurmrestapi-singleuser wrapper script.",
+    )
+
     def options_form(self, spawner=None):
+        """
+        If enable_user_options_form is True, show form fields for Slurm job options.
+        """
         s = spawner or self
         if not s.enable_user_options_form:
             return ""
@@ -159,6 +200,9 @@ env | grep JUPYTER* """,
 """
 
     def options_from_form(self, formdata):
+        """
+            Parse the submitted form data for Slurm job options. Each key is expected to be a list of values, so we take the first one.
+        """
         # JupyterHub sends each key as a list of submitted values.
         parsed = {}
         for key in ("account", "partition", "qos", "time_limit", "token", "slurm_user"):
@@ -171,6 +215,9 @@ env | grep JUPYTER* """,
         return parsed
 
     async def apply_user_options(self, spawner, user_options):
+        """
+        Apply user options from the spawn form to the spawner's attributes for job submission.
+        """
         s = spawner or self
         if not isinstance(user_options, dict):
             return
@@ -191,15 +238,30 @@ env | grep JUPYTER* """,
             s.slurm_user = str(slurm_user).strip()
 
     def _slurm_user_value(self) -> str:
-        return self.slurm_user or self.user.name
+        """
+        Determine the Slurm user to use for REST requests. The precedence is:
+        1. User provided via spawn form. 
+        2. User set via configuration.   
+        """
+        if self.slurm_user=="":
+            raise ValueError("slurm_user must be set either via config or spawn form")  
+        return self.slurm_user
 
     def _slurm_token_value(self) -> str:
-        token = self.slurm_token
-        if token:
-            return token
-        return self.get_env().get(self.token_env_var, "")
+        """
+        Determine the Slurm REST auth token to use. The precedence is:
+        1. Token provided via spawn form.
+        2. Token set via configuration.
+        """
+        if self.slurm_token=="":
+            raise ValueError("slurm_token must be set either via config or spawn form")  
+        return  self.slurm_token
 
     def _api_version_suffix(self) -> str:
+        """
+        Convert slurm_api_version like "v0.0.40" to a suffix like "v0040" used in openapi_client method names. 
+        This allows using newer API versions with older openapi_client libraries that may not have explicit support for them, as long as the method signatures are compatible.
+        """
         # v0.0.40 -> v0040
         parts = self.slurm_api_version.strip().lstrip("v").split(".")
         if len(parts) != 3 or not all(p.isdigit() for p in parts):
@@ -218,6 +280,9 @@ env | grep JUPYTER* """,
         return f"v{minor:02d}{patch:02d}"
 
     def _resolve_method_name(self, api: Any, op: str) -> str:
+        """
+        Resolve the appropriate method name for a given operation based on the API version.
+        """
         preferred = f"slurm_{self._api_version_suffix()}_{op}"
         if hasattr(api, preferred):
             return preferred
@@ -317,33 +382,6 @@ env | grep JUPYTER* """,
             total_seconds = (days * 24 + a) * 3600 + b * 60 + c
         return int(math.ceil(total_seconds / 60.0))
 
-    def _parse_memory_mebibytes(self, value: str) -> int:
-        raw = str(value).strip()
-        if not raw:
-            raise ValueError("mem_per_node cannot be empty")
-
-        if raw.isdigit():
-            return int(raw)
-
-        m = re.match(r"^(\d+)\s*([KMGTP])(?:i?B?)?$", raw, re.IGNORECASE)
-        if not m:
-            raise ValueError(
-                f"Unsupported mem_per_node format '{
-                    value
-                }'. Expected integer MiB or suffix K/M/G/T/P."
-            )
-
-        amount = int(m.group(1))
-        unit = m.group(2).upper()
-        scale_to_mib = {
-            "K": 1 / 1024,
-            "M": 1,
-            "G": 1024,
-            "T": 1024 * 1024,
-            "P": 1024 * 1024 * 1024,
-        }
-        return int(math.ceil(amount * scale_to_mib[unit]))
-
     async def _slurm_call(self, op: str, *args):
         try:
             import openapi_client
@@ -378,50 +416,34 @@ env | grep JUPYTER* """,
             raise
 
     def _singleuser_command(self) -> str:
+        """
+        Construct the command to launch the single-user server, wrapped by the slurmrestapi-singleuser script for environment capture.
+        """
         wrapper_cmd="slurmrestapi-singleuser"
-        api_url = f"JUPYTERHUB_API_URL={self.hub.api_url}"
-        service_url = f"JUPYTERHUB_SERVICE_URL=\"http://0.0.0.0:{self.port}"
-        argv = ["env",service_url,api_url, wrapper_cmd] + list(self.cmd) + list(self.get_args()) + ["--debug"]
-        #argv.extend(["--ip=0.0.0.0", f"--port={self.port}"])
+        argv = [f"{self.wrapper_cmd}"] + list(self.cmd) + list(self.get_args())
         argv.extend(["--ip=0.0.0.0"])
         return shlex.join(argv)
 
     def _render_script(self) -> str:
+        """
+        Render the batch script by substituting the prologue, singleuser_cmd, and epilogue into the batch_script template.
+        """
         return self.batch_script.format(
             prologue=self.prologue,
             singleuser_cmd=self._singleuser_command(),
+            epilogue=self.epilogue,
         )
 
-    def _first_hostname_from_nodelist(self, raw: str) -> str:
-        raw = (raw or "").strip()
-        if not raw:
-            return ""
-
-        # Example: node[001-004,010] -> node001
-        m = re.match(r"^([A-Za-z0-9_.-]+)\[([^\]]+)\]$", raw)
-        if m:
-            prefix, ranges = m.groups()
-            first = ranges.split(",")[0]
-            start = first.split("-")[0]
-            if start.isdigit():
-                width = len(start)
-                return f"{prefix}{int(start):0{width}d}"
-            return f"{prefix}{start}"
-
-        # Example: node001,node002 -> node001
-        return raw.split(",")[0]
-
     def _job_state(self, job: Dict[str, Any]) -> str:
+        """
+        Extract the job state from the Slurm job info dictionary. The state is returned as a list of strings (e.g. ["RUNNING", "COMPLETED"]).
+        """
         return list(map(lambda x: x.upper(), job.get("job_state", [])))
 
-    def _job_host(self, job: Dict[str, Any]) -> str:
-        for key in ("nodes", "batch_host", "alloc_node", "node_list"):
-            value = job.get(key)
-            if value:
-                return self._first_hostname_from_nodelist(str(value))
-        return ""
-
     async def _submit_job(self) -> str:
+        """
+        Submit a job to slurmrestd with the rendered batch script and return the job ID.
+        """
         script = self._render_script()
         if self.debug_show_batch_script:
             self.log.warning(
@@ -435,11 +457,8 @@ env | grep JUPYTER* """,
                 self._parse_time_limit_minutes(self.time_limit)
             ),
             "current_working_directory": home_dir,
-#            "environment": ["PATH=/bin/:/usr/bin/:/sbin/", f"HOME={home_dir}",
-#                            f"JUPYTERHUB_API_TOKEN={self.get_env().get('JUPYTERHUB_API_TOKEN', '')}",
-#                            f"JUPYTERHUB_USER={self.user.name}",
-#                            f"JUPYTERHUB_SERVICE_PREFIX={self.get_env().get('JUPYTERHUB_SERVICE_PREFIX', '')}"],
-            "environment": [f"{k}={v}" for k, v in self.get_env().items()],
+            # Like for the batchspawner, transfer all env variables
+            "environment": [f"{k}={v}" for k, v in self.get_env().items()] + [f"PATH=/bin/:/usr/bin/:/sbin/"] + [f"HOME={home_dir}"],
         }
         if self.partition:
             job_desc["partition"] = self.partition
@@ -447,8 +466,6 @@ env | grep JUPYTER* """,
             job_desc["account"] = self.account
         if self.qos:
             job_desc["qos"] = self.qos
-
-        job_desc["required_nodes"] = ["mel3003"]
 
         payload: Dict[str, Any] = {
             "job": job_desc,
@@ -466,6 +483,10 @@ env | grep JUPYTER* """,
         return job_id
 
     async def _get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get job info from slurmrestd for the given job ID. If the job is not found (e.g. 404), return None. For other errors, raise an exception.
+        """
+
         try:
             resp = self._to_dict(await self._slurm_call("get_job", job_id))
         except RuntimeError as e:
@@ -479,6 +500,12 @@ env | grep JUPYTER* """,
         return jobs[0]
 
     async def start(self):
+        """
+            Start the single-user server by submitting a Slurm job and waiting for it to start running.
+            1. Submit job via slurmrestd and get job ID.
+            2. Poll job state until RUNNING.
+            3. Once running, return (ip, port) for JupyterHub to connect to.
+        """
 
         self.job_id = await self._submit_job()
         if len(self.job_id) == 0:
@@ -501,22 +528,39 @@ env | grep JUPYTER* """,
 
             await asyncio.sleep(self.startup_poll_interval)
         while self.port==0:
-            self.log.info("Waitinf or singleuser server to bind to start")
+            self.log.info("Waiting or singleuser server to bind to start")
             await asyncio.sleep(self.startup_poll_interval)
+        self.db.commit()
+        self.log.info(
+            "Notebook server job {} started at {}:{}".format(
+                self.job_id, self.ip, self.port
+            )
+        )
 
         return (self.ip, self.port)
+
+
+    async def cancel_job(self):
+        """
+        Cancel the currently running or pending Slurm job.
+        """
+        if not self.job_id:
+            raise RuntimeError("No job_id found. Cannot cancel a job that hasn't been submitted.")
+
+        try:
+            await self._slurm_call("delete_job", self.job_id)
+            self.log.info(f"Successfully cancelled job {self.job_id} for user {self.user.name}.")
+        except Exception as e:
+            self.log.error(f"Failed to cancel job {self.job_id} for user {self.user.name}: {e}")
+            raise
 
     async def poll(self):
         if not self.job_id:
             return 1
-
         job = await self._get_job(self.job_id)
-        print(job)
         if not job:
             return 1
-
         state = self._job_state(job)
-        print(state)
         if len(state) == 0:
             return 1
         else:
@@ -528,22 +572,52 @@ env | grep JUPYTER* """,
                 case _:
                     return 1
 
-    async def stop(self, now=False):
+    async def stop(self,now=False):
+        """
+        Stop the single-user server by canceling the Slurm job via slurmrestd.
+        """
         if not self.job_id:
             return
-
         await self._slurm_call("delete_job", self.job_id)
 
+    async def progress(self):
+        job = await self._get_job(self.job_id)
+        if not job:
+            yield {"message": "Job not found..."}
+            return
+        state = self._job_state(job)
+        while True:
+            match state[0]:
+                case "PENDING" | "CONFIGURING":
+                    yield {"message": f"Cluster job {self.job_id} is pending in queue..."}
+                case "RUNNING":
+                    yield {"message": f"Cluster job {self.job_id} is running ... waiting to connect "}
+                    return
+                case "FAILED":
+                    yield {"message": f"{self.job_id} failed ..."}
+                case _:
+                    yield {"message": f"{self.job_id} has an unknown state ..."}
+            await asyncio.sleep(1)
+
     def get_state(self):
+        """
+        Get the spawner state to be stored by JupyterHub. We include the job_id so that we can track the Slurm job across restarts and for polling its status.
+        """
         state = super().get_state()
         if self.job_id:
             state["job_id"] = self.job_id
         return state
 
     def load_state(self, state):
+        """
+        Load the spawner state from the stored state. We extract the job_id to continue tracking the Slurm job across restarts and for polling its status.
+        """
         super().load_state(state)
         self.job_id = str(state.get("job_id", ""))
 
     def clear_state(self):
+        """
+        Clear the spawner state. We also clear the job_id to ensure that we don't accidentally track an old job after a stop or if the state is cleared for any reason.
+        """
         super().clear_state()
         self.job_id = ""
