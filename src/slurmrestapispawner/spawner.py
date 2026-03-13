@@ -163,6 +163,15 @@ class SlurmRESTAPISpawner(Spawner):
         help="Command name for the slurmrestapi-singleuser wrapper script.",
     )
 
+    # The current_working_directory is set in the job submission payload to specify the working directory for the single-user server. 
+    # It defaults to empty, which means slurmrestd will use its default behavior (often the home directory of the user).
+    # You can set this to a specific path if needed for your cluster setup.
+    current_working_directory = Unicode(
+        "",
+        config=True,
+        help="Current working directory for the single-user server.",
+    )
+
     def options_form(self, spawner=None):
         """
         If enable_user_options_form is True, show form fields for Slurm job options.
@@ -174,15 +183,15 @@ class SlurmRESTAPISpawner(Spawner):
 <div style="max-width: 400px; margin: auto;">
     <div style="margin-bottom: 1em;">
         <label for="slurm-account">Account</label>
-        <input name="account" id="slurm-account" type="text" value="{s.account or ''}" placeholder="Enter account" style="width: 100%;" />
+        <input name="account" id="slurm-account" type="text" value="{s.account}" placeholder="Enter account" style="width: 100%;" />
     </div>
     <div style="margin-bottom: 1em;">
         <label for="slurm-partition">Partition</label>
-        <input name="partition" id="slurm-partition" type="text" value="{s.partition or ''}" placeholder="Enter partition" style="width: 100%;" />
+        <input name="partition" id="slurm-partition" type="text" value="{s.partition}" placeholder="Enter partition" style="width: 100%;" />
     </div>
     <div style="margin-bottom: 1em;">
         <label for="slurm-qos">QoS</label>
-        <input name="qos" id="slurm-qos" type="text" value="{s.qos or ''}" placeholder="Enter QoS" style="width: 100%;" />
+        <input name="qos" id="slurm-qos" type="text" value="{s.qos}" placeholder="Enter QoS" style="width: 100%;" />
     </div>
     <div style="margin-bottom: 1em;">
         <label for="slurm-time-limit">Time Limit</label>
@@ -196,6 +205,10 @@ class SlurmRESTAPISpawner(Spawner):
         <label for="slurm-user">Slurm User</label>
         <input name="slurm_user" id="slurm-user" type="text" value="{s.slurm_user}" placeholder="Enter Slurm user" style="width: 100%;" />
     </div>
+    <div style="margin-bottom: 1em;">
+        <label for="cwd">Current Working Directory</label>
+        <input name="current_working_directory" id="cwd" type="text" value="{s.current_working_directory}" placeholder="Enter working directory" style="width: 100%;" />
+    </div>
 </div>
 """
 
@@ -205,7 +218,7 @@ class SlurmRESTAPISpawner(Spawner):
         """
         # JupyterHub sends each key as a list of submitted values.
         parsed = {}
-        for key in ("account", "partition", "qos", "time_limit", "token", "slurm_user"):
+        for key in ("account", "partition", "qos", "time_limit", "token", "slurm_user","current_working_directory"):
             value = formdata.get(key, [""])
             if isinstance(value, list):
                 value = value[0] if value else ""
@@ -225,7 +238,7 @@ class SlurmRESTAPISpawner(Spawner):
         if s.debug_slurm_api:
             s.log.warning("Applying user options: %s", user_options)
 
-        for key in ("account", "partition", "qos", "time_limit"):
+        for key in ("account", "partition", "qos", "time_limit", "current_working_directory"):
             value = user_options.get(key, "")
             if value:
                 setattr(s, key, str(value).strip())
@@ -450,15 +463,16 @@ class SlurmRESTAPISpawner(Spawner):
                 "Rendered Slurm batch script for %s:\n%s", self.user.name, script
             )
 
-        home_dir = f"/mnt/tier2/users/{self.slurm_user}"
+        
+
         job_desc = {
             "name": f"jupyter-{self.slurm_user}",
             "time_limit": self._uint_value(
                 self._parse_time_limit_minutes(self.time_limit)
             ),
-            "current_working_directory": home_dir,
+            "current_working_directory": self.current_working_directory,
             # Like for the batchspawner, transfer all env variables
-            "environment": [f"{k}={v}" for k, v in self.get_env().items()] + [f"PATH=/bin/:/usr/bin/:/sbin/"] + [f"HOME={home_dir}"],
+            "environment": [f"{k}={v}" for k, v in self.get_env().items()] + [f"PATH=/bin/:/usr/bin/:/sbin/"],
         }
         if self.partition:
             job_desc["partition"] = self.partition
@@ -555,22 +569,42 @@ class SlurmRESTAPISpawner(Spawner):
             raise
 
     async def poll(self):
+        """
+        Poll the status of the Slurm job to determine if the single-user server is running, pending, or has completed/failed.
+
+        Returns:
+            - None: If the job is running or pending.
+            - 0: If the job has completed successfully.
+            - 1: If the job has failed, completed with errors, or is not found.
+        """
         if not self.job_id:
+            self.log.warning("No job_id found. Returning failed status.")
             return 1
-        job = await self._get_job(self.job_id)
+
+        try:
+            job = await self._get_job(self.job_id)
+        except Exception as e:
+            self.log.error(f"Failed to fetch job details for job_id {self.job_id}: {e}")
+            return 1
+
         if not job:
+            self.log.warning(f"Job with job_id {self.job_id} not found. Returning failed status.")
             return 1
+
         state = self._job_state(job)
-        if len(state) == 0:
+        if not state:
+            self.log.warning(f"Job state for job_id {self.job_id} is empty. Returning failed status.")
             return 1
-        else:
-            match state[0]:
-                case "RUNNING" | "PENDING" | "COMPLETING" | "CONFIGURING":
-                    return None
-                case "COMPLETED":
-                    return 0
-                case _:
-                    return 1
+
+        self.log.info(f"Job {self.job_id} is in state: {state[0]}")
+        match state[0]:
+            case "RUNNING" | "PENDING" | "COMPLETING" | "CONFIGURING":
+                return None
+            case "COMPLETED":
+                return 0
+            case _:
+                self.log.warning(f"Job {self.job_id} is in an unexpected state: {state[0]}. Returning failed status.")
+                return 1
 
     async def stop(self,now=False):
         """

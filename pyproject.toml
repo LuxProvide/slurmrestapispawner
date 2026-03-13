@@ -7,17 +7,18 @@ name = "slurmrestapispawner"
 version = "0.1.0"
 description = "JupyterHub Spawner backed by Slurm REST API (slurmrestd)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
-  { name = "slurmrestapiSpawner contributors" }
+  {name = "Emmanuel Kieffer", email = "emmanuel.kieffer@lxp.lu"},
 ]
 dependencies = [
   "jupyterhub>=4.0",
   "traitlets>=5.0",
+  "slurmrestapispawner @ git+ssh://github.com:LuxProvide/slurmrestapi.git",
 ]
 
 [project.urls]
-Homepage = "https://example.invalid/slurmrestapiSpawner"
+Homepage = "https://github.com/LuxProvide/slurmrestapispawner"
 
 [project.scripts]
 slurmrestapi-singleuser = "slurmrestapispawner.singleuser:main"
