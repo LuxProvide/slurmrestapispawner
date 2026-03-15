@@ -15,7 +15,7 @@ dependencies = [
   "jupyterhub>=5.0",
   "jupyterlab>=4.0",
   "traitlets>=5.0",
-  "slurmrestapi @ https://github.com/LuxProvide/slurmrestapi.git",
+  "slurmrestapi @ git+https://github.com/LuxProvide/slurmrestapi.git",
 ]
 
 [project.urls]
