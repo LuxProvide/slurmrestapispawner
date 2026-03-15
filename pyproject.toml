@@ -12,9 +12,10 @@ authors = [
   {name = "Emmanuel Kieffer", email = "emmanuel.kieffer@lxp.lu"},
 ]
 dependencies = [
-  "jupyterhub>=4.0",
+  "jupyterhub>=5.0",
+  "jupyterlab>=4.0",
   "traitlets>=5.0",
-  "slurmrestapispawner @ git+ssh://github.com:LuxProvide/slurmrestapi.git",
+  "slurmrestapi @ https://github.com/LuxProvide/slurmrestapi.git",
 ]
 
 [project.urls]
