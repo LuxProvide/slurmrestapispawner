@@ -157,8 +157,8 @@ class SlurmRESTAPISpawner(Spawner):
     )
 
     # The wrapper_cmd is used to invoke the slurmrestapi-singleuser script, which captures the environment variables and other context for the single-user server.
-    wrapper_cmd = Unicode(
-        "slurmrestapi-singleuser",
+    wrapper_cmd = List(
+        ["slurmrestapi-singleuser"],
         config=True,
         help="Command name for the slurmrestapi-singleuser wrapper script.",
     )
@@ -432,8 +432,7 @@ class SlurmRESTAPISpawner(Spawner):
         """
         Construct the command to launch the single-user server, wrapped by the slurmrestapi-singleuser script for environment capture.
         """
-        wrapper_cmd="slurmrestapi-singleuser"
-        argv = [f"{self.wrapper_cmd}"] + list(self.cmd) + list(self.get_args())
+        argv = self.wrapper_cmd + list(self.cmd) + list(self.get_args())
         argv.extend(["--ip=0.0.0.0"])
         return shlex.join(argv)
 
