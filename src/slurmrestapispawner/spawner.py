@@ -199,7 +199,7 @@ class SlurmRESTAPISpawner(Spawner):
     </div>
     <div style="margin-bottom: 1em;">
         <label for="slurm-token">Token</label>
-        <input name="token" id="slurm-token" type="password" value="{s.slurm_token}" placeholder="SLURM JWT token" style="width: 100%;" />
+        <input name="slurm_token" id="slurm-token" type="password" value="{s.slurm_token}" placeholder="SLURM JWT token" style="width: 100%;" />
     </div>
     <div style="margin-bottom: 1em;">
         <label for="slurm-user">Slurm User</label>
@@ -218,7 +218,7 @@ class SlurmRESTAPISpawner(Spawner):
         """
         # JupyterHub sends each key as a list of submitted values.
         parsed = {}
-        for key in ("account", "partition", "qos", "time_limit", "token", "slurm_user","current_working_directory"):
+        for key in ("account", "partition", "qos", "time_limit", "slurm_token", "slurm_user","current_working_directory"):
             value = formdata.get(key, [""])
             if isinstance(value, list):
                 value = value[0] if value else ""
@@ -243,9 +243,9 @@ class SlurmRESTAPISpawner(Spawner):
             if value:
                 setattr(s, key, str(value).strip())
 
-        token = user_options.get("token", "")
-        if token:
-            s.slurm_token = str(token).strip()
+        slurm_token = user_options.get("slurm_token", "")
+        if slurm_token:
+            s.slurm_token = str(slurm_token).strip()
         slurm_user = user_options.get("slurm_user", "")
         if slurm_user:
             s.slurm_user = str(slurm_user).strip()

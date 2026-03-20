@@ -13,7 +13,7 @@ A custom JupyterHub Spawner that integrates with the Slurm REST API (`slurmrestd
   - `partition`
   - `qos`
   - `time_limit`
-  - `token`
+  - `slurm_token`
   - `slurm_user`
 
 ## Prerequisites
@@ -44,12 +44,9 @@ c.JupyterHub.spawner_class = "slurmrestapispawner.SlurmRESTAPISpawner"
 
 c.SlurmRESTAPISpawner.slurmrestd_url = "https://slurmrestd.example.org:6820"
 c.SlurmRESTAPISpawner.slurm_api_version = "v0.0.40"
-c.SlurmRESTAPISpawner.token = "SLURM JWT token"
-c.SlurmRESTAPISpawner.enable_user_options_form = True
-
-# Optional settings
+c.SlurmRESTAPISpawner.slurm_token = "SLURM JWT token"
+c.SlurmRESTAPISpawner.user_options_form = True
 c.SlurmRESTAPISpawner.partition = "interactive"
-c.SlurmRESTAPISpawner.account = "my-account"
 c.SlurmRESTAPISpawner.slurm_user = "my-user"
 c.SlurmRESTAPISpawner.time_limit = "02:00:00"
 ```
